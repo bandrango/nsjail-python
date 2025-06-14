@@ -1,26 +1,25 @@
-FROM ubuntu:22.04
+# Use minimal Alpine with Python 3.10
+FROM python:3.10-alpine
 
-# 1) Install system dependencies
-RUN apt-get update && apt-get install -y \
-    python3 python3-pip git build-essential clang libpython3-dev pkg-config \
-    protobuf-compiler libprotobuf-dev libseccomp-dev autoconf bison flex \
-    libnl-3-dev libnl-route-3-dev libnl-genl-3-dev && rm -rf /var/lib/apt/lists/*
+# Install nsjail and its libseccomp runtime
+RUN apk add --no-cache nsjail libseccomp
 
-# 2) Copy application and configs
+# Set working directory
 WORKDIR /app
-# 2.1) Make src/ visible as top-level imports
-ENV PYTHONPATH=/app/src
+
+# Copy Python requirements and install them without cache
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy your nsjail config into /etc so nsjail can find it
+COPY src/nsjail.cfg /etc/nsjail.cfg
+
+# Create logs folder for your app
+RUN mkdir -p logs
+
+# Copy the rest of your application code
 COPY . .
 
-# 3) Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt \
-    && mv src/nsjail.cfg /etc/nsjail.cfg \
-    && mkdir -p logs
-
-# 4) Build nsjail
-RUN git clone --recursive https://github.com/google/nsjail.git /opt/nsjail \
-    && cd /opt/nsjail && make && cp nsjail /usr/local/bin/
-
-# 5) Expose and start
+# Expose API port and set entrypoint
 EXPOSE 8080
 ENTRYPOINT ["python3", "main.py"]

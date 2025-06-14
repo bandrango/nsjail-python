@@ -1,5 +1,3 @@
-# File: src/adapters/logging_manager.py
-
 import os
 import logging
 import logging.config

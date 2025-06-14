@@ -1,5 +1,3 @@
-# File: src/adapters/validator/import_validator.py
-
 import ast
 import importlib
 from domain.exceptions import ExecutionError

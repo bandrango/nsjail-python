@@ -1,5 +1,3 @@
-# File: src/adapters/http/execute.py
-
 from flask import Blueprint, request
 from adapters.executor.nsjail_executor import NsJailExecutor
 from adapters.validator.import_validator import ImportValidator
@@ -11,28 +9,33 @@ bp = Blueprint('execute', __name__)
 
 @bp.route('/execute', methods=['POST'])
 def execute_script():
-    # Log receipt of incoming HTTP payload
-    payload = request.get_json()
+    """
+    POST /execute
+    Expects JSON: {"script": "<python code>"}
+    Success -> {"result": <return of main()>, "stdout": "<captured stdout>"}
+    Error   -> {"error": "<message>",      "stdout": "<captured stdout>"}
+    """
+    payload = request.get_json() or {}
     request_logger.info("Received execution request", extra={"payload": payload})
 
-    script = payload.get('script')
+    script = payload.get('script', '')
     try:
-        # 1. Validate imports dynamically
         request_logger.debug("Starting import validation")
-        validator = ImportValidator()
-        validator.validate(script)
+        ImportValidator().validate(script)
         request_logger.info("Import validation passed")
 
-        # 2. Execute the script via NsJail
         request_logger.info("Executing script in sandbox")
         result, stdout = executor.execute(script)
-        result_logger.info("Script executed successfully", extra={"result": result})
-        if stdout:
-            result_logger.warning("Stdout captured during execution", extra={"stdout": stdout})
 
-        return {'result': result}, 200
+        # Build the response exactly as required
+        response = {"result": result, "stdout": stdout}
+
+        # --- Updated line: log the full JSON under 'result' ---
+        result_logger.info(f"Responding with execution output: {response}")
+
+        return response, 200
 
     except ExecutionError as e:
-        # 3. Log the error with full stack trace
+        stdout = getattr(e, 'stdout', '')
         error_logger.error("ExecutionError occurred", exc_info=True)
-        return {'error': str(e)}, 400
+        return {"error": str(e), "stdout": stdout}, 400

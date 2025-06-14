@@ -1,5 +1,3 @@
-# File: src/adapters/executor/nsjail_executor.py
-
 import os
 import tempfile
 import importlib.util
@@ -53,35 +51,44 @@ class NsJailExecutor:
                 try:
                     result = module.main()
                 except Exception:
+                    # Log the stacktrace
                     error_logger.error("Exception in user main()", exc_info=True)
-                    raise ExecutionError("Execution failed")
+                    # Attach whatever was printed so far
+                    err = ExecutionError("Execution failed")
+                    err.stdout = buf.getvalue()
+                    raise err
             stdout = buf.getvalue()
 
-            # 5. If main() returned None but stdout exists, treat as disallowed (e.g. directory-list)
+            # 5. Disallow prints without return (e.g. directory-listings)
             if result is None and stdout:
                 error_logger.error(
                     "Disallowed stdout with no return value",
                     extra={"captured_stdout": stdout}
                 )
-                raise ExecutionError("Execution failed")
+                err = ExecutionError("Execution failed")
+                err.stdout = stdout
+                raise err
 
-            # 6. If user printed intentionally (result != None), allow and continue
-            # 7. Ensure result is JSON-serializable
+            # 6. Ensure result is JSON-serializable
             try:
                 json.dumps(result)
             except Exception:
                 error_logger.error("Result not JSON-serializable", exc_info=True)
-                raise ExecutionError("Execution failed")
+                err = ExecutionError("Execution failed")
+                err.stdout = stdout
+                raise err
 
-            # 8. Disallow any newline inside returned values
+            # 7. Disallow any multi-line strings in the returned value
             if self._contains_newline(result):
                 error_logger.error(
                     "Disallowed multiline content in return value",
                     extra={"result": result}
                 )
-                raise ExecutionError("Execution failed")
+                err = ExecutionError("Execution failed")
+                err.stdout = stdout
+                raise err
 
-            # 9. Log success
+            # 8. Log success and return both result and stdout
             result_logger.info("Script run complete", extra={"result": result, "stdout": stdout})
             return result, stdout
 
