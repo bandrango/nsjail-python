@@ -1,0 +1,6 @@
+flask
+flask-restx
+pandas
+numpy
+pyyaml
+pydantic
