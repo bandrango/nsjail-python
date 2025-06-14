@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  PROJECT_ID: nsjail-python
+  PROJECT_ID: nsjail-python-462921
   GAR_LOCATION: us-east1
   SERVICE_NAME: nsjail-python-service
 
