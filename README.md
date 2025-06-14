@@ -2,7 +2,6 @@
 
 Secure, scalable microservice for executing arbitrary Python code in an isolated sandbox using [nsjail](https://github.com/google/nsjail).
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 ## 🚀 Overview
 
@@ -28,7 +27,7 @@ Secure, scalable microservice for executing arbitrary Python code in an isolated
 - **Containerized**: Docker-ready for seamless deployment on Cloud Run.
 - **CI/CD Ready**: Preconfigured GitHub Actions workflow for linting and build checks.
 
-## 🏗 Architecture
+## 🏗 Architecture (Hexagonal Architecture)
 
 ```plaintext
 Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python Interpreter → Response
@@ -77,10 +76,10 @@ Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python I
 3. **Response**:  
    ```json
    {
-    "result": {
-        "message": "Hello from nsjail-python!"
-    },
-    "stdout": ""
+        "result": {
+            "message": "Hello from nsjail-python!"
+        },
+        "stdout": ""
     }
    ```
 
