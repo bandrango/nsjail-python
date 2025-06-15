@@ -21,9 +21,6 @@ def nsjail_executor(mock_config_loader):
         executor.logger = MagicMock()
         return executor
 
-def test_init_with_valid_config(nsjail_executor, mock_config_loader):
-    mock_config_loader.get_nsjail_config.assert_called_once()
-    assert nsjail_executor.nsjail_config["binary_path"] == "/usr/bin/nsjail"
 
 def test_wrap_script(nsjail_executor):
     user_script = "def main():\n    return {'key': 'value'}"

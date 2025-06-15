@@ -1,46 +1,54 @@
 import logging
+from flask import Blueprint, request, jsonify
 
-from flask import Blueprint, request
 from adapters.executor.nsjail_executor import NsjailExecutor
 from adapters.validator.import_validator import ImportValidator
 from domain.exceptions import ExecutionError
-from interfaces.schemas import ScriptRequestSchema, ExecutionResponseSchema,  ExecutionResponseError
+from interfaces.schemas import (
+    ScriptRequestSchema,
+    ExecutionResponseSchema,
+    ExecutionResponseError
+)
 
 executor = NsjailExecutor()
-bp = Blueprint('execute', __name__)
+bp = Blueprint("execute", __name__)
+
+# Loggers
 request_logger = logging.getLogger("request_logger")
 result_logger = logging.getLogger("result_logger")
 error_logger = logging.getLogger("error_logger")
 
-@bp.route('/execute', methods=['POST'])
+@bp.route("/execute", methods=["POST"])
 def execute_script():
     payload = request.get_json() or {}
-    validated = ScriptRequestSchema(**payload)
     request_logger.info("Received execution request", extra={"payload": payload})
 
-    script = validated.script
     try:
-        request_logger.debug("Starting import validation")
+        validated_request = ScriptRequestSchema(**payload)
+        script = validated_request.script
+
+        request_logger.debug("Validating imports")
         ImportValidator().validate(script)
-        request_logger.info("Import validation passed")
+        request_logger.info("Import validation successful")
 
-        request_logger.info("Executing script in sandbox")
-        output = executor.execute(script)
-        if output.get("error"):
-            error_scheme = ExecutionResponseError(**output)
-            error_logger.error("Execution failed", extra={"error": error_scheme.error})            
-            return {"error": error_scheme.error}, 400
+        request_logger.debug("Starting script execution")
+        result = executor.execute(script)
+        result_logger.info("Script executed successfully", extra={"result": result})
 
-        # Build the response exactly as required
-        scheme_result = ExecutionResponseSchema(**output)
-        response = {"result": scheme_result.result, "stdout": scheme_result.stdout}
+        if hasattr(result, "error") and result.error:
+            return jsonify(error=result.error), 400
 
-        # --- Updated line: log the full JSON under 'result' ---
-        result_logger.info(f"Responding with execution output: {response}")
+        return jsonify(result=result.result, stdout=result.stdout), 200
 
-        return response, 200
+    except ExecutionError as ex:
+        error_logger.error("Execution error", exc_info=True)
+        error_response = ExecutionResponseError(
+            message=str(ex),
+            stdout=ex.stdout,
+            stderr=ex.stderr
+        )
+        return jsonify(error_response.error), 400
 
     except Exception as e:
-        stdout = getattr(e, 'stdout', '')
-        error_logger.error("ExecutionError occurred", exc_info=True)
-        return {"error": str(e), "stdout": stdout}, 400
+        error_logger.exception("Unexpected error during execution")
+        return jsonify({"error": "Unexpected error occurred"}), 500

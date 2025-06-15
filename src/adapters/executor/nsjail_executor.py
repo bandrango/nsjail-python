@@ -3,18 +3,26 @@ import logging
 import tempfile
 import json
 from pathlib import Path
+
 from src.utils.config_loader import AppConfigLoader
+from interfaces.schemas import ExecutionResponseSchema, ExecutionResponseError
 
 
 class NsjailExecutor:
     def __init__(self):
-        self.config_loader = AppConfigLoader()
-        self.nsjail_config = self.config_loader.get_nsjail_config()
         self.logger = logging.getLogger("request_logger")
+        self.config = AppConfigLoader().get_nsjail_config()
 
-        for key in ["binary_path", "config_path", "python_path"]:
-            if key not in self.nsjail_config or not self.nsjail_config[key]:
-                raise ValueError(f"Missing NSJail config: {key}")
+        self.binary_path = self._require_config("binary_path")
+        self.config_path = self._require_config("config_path")
+        self.python_path = self._require_config("python_path")
+        self.timeout = int(self.config.get("timeout", 10))
+
+    def _require_config(self, key: str) -> str:
+        value = self.config.get(key)
+        if not value:
+            raise ValueError(f"Missing NSJail config value for: '{key}'")
+        return value
 
     def _wrap_script(self, user_script: str, result_path: str) -> str:
         return f"""{user_script}
@@ -32,70 +40,55 @@ if __name__ == "__main__":
         print("ERROR:", e)
 """
 
-    def execute(self, user_script: str) -> dict:
-        response = {
-            "result": None,
-            "stdout": "",
-            "error": None
-        }
-
+    def execute(self, user_script: str):
         try:
             with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as script_file:
                 script_path = Path(script_file.name)
-                result_path = Path(script_file.name.replace(".py", ".json"))
+                result_path = script_path.with_suffix(".json")
 
                 wrapped_script = self._wrap_script(user_script, str(result_path))
                 script_file.write(wrapped_script)
 
-            self.logger.info(f"Temp script created at: {script_path}")
-
-            cmd = [
-                self.nsjail_config["binary_path"],
-                "--config", self.nsjail_config["config_path"],
-                "--",
-                self.nsjail_config["python_path"],
+            command = [
+                self.binary_path,
+                "--config", self.config_path,
+                "--", self.python_path,
                 str(script_path)
             ]
 
-            self.logger.info(f"Executing command: {' '.join(cmd)}")
+            self.logger.debug(f"Running NSJail command: {' '.join(command)}")
 
-            result = subprocess.run(
-                cmd,
+            process = subprocess.run(
+                command,
                 capture_output=True,
                 text=True,
-                timeout=int(self.nsjail_config.get("time_limit", 10))
+                timeout=self.timeout
             )
 
-            response["stdout"] = result.stdout.strip()
-
-            if result.returncode != 0 or "ERROR:" in result.stdout:
-                response["error"] = result.stdout.strip() or result.stderr.strip()
-                return response
-
-            if result_path.exists():
+            if process.returncode == 0 and result_path.exists():
                 with open(result_path) as f:
-                    response["result"] = json.load(f)
+                    result_data = json.load(f)
+
+                return ExecutionResponseSchema(
+                    result=result_data,
+                    stdout=process.stdout
+                )
             else:
-                response["error"] = "main() did not return a result or result file missing."
+                error_message = (
+                    f"Script exited with code {process.returncode}. "
+                    f"Stderr: {process.stderr.strip()}"
+                )
+                self.logger.exception(error_message)
+                return ExecutionResponseError(
+                    error="Unable to execute the submitted command. Please verify the structure and content of the script."
+                    )
 
-            return response
-
-        except subprocess.TimeoutExpired:
-            self.logger.error("Execution timed out")
-            response["error"] = "Execution timed out"
-            return response
-
-        except Exception as ex:
-            self.logger.exception("Unexpected error during execution")
-            response["error"] = str(ex)
-            return response
+        except Exception as e:
+            self.logger.exception("NSJail execution error")
+            return ExecutionResponseError(error=f"Execution error: {str(e)}")
 
         finally:
-            for path in [script_path, result_path]:
-                try:
-                    if path.exists():
-                        path.unlink()
-                        self.logger.info(f"Deleted temp file: {path}")
-                except Exception:
-                    self.logger.warning(f"Could not delete temp file: {path}")
-                    
+            if 'script_path' in locals() and script_path.exists():
+                script_path.unlink()
+            if 'result_path' in locals() and result_path.exists():
+                result_path.unlink()
