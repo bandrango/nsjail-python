@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN apk add --no-cache nsjail libseccomp
 COPY src/config/nsjail.cfg /etc/nsjail.cfg
 RUN mkdir -p logs
+RUN mkdir -p tmp
 
 COPY . .
 
