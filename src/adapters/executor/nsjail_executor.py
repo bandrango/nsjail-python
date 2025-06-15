@@ -11,6 +11,7 @@ from interfaces.schemas import ExecutionResponseSchema, ExecutionResponseError
 class NsjailExecutor:
     def __init__(self):
         self.logger = logging.getLogger("request_logger")
+        self.cloud_logger = logging.getLogger("cloud_logger")
         self.config = AppConfigLoader().get_nsjail_config()
 
         self.binary_path = self._require_config("binary_path")
@@ -57,6 +58,7 @@ if __name__ == "__main__":
             ]
 
             self.logger.debug(f"Running NSJail command: {' '.join(command)}")
+            self.cloud_logger.debug(f"Running NSJail command: {' '.join(command)}")
 
             process = subprocess.run(
                 command,
@@ -79,12 +81,14 @@ if __name__ == "__main__":
                     f"Stderr: {process.stderr.strip()}"
                 )
                 self.logger.exception(error_message)
+                self.cloud_logger.exception(error_message)
                 return ExecutionResponseError(
                     error="Unable to execute the submitted command. Please verify the structure and content of the script."
                     )
 
         except Exception as e:
             self.logger.exception("NSJail execution error")
+            self.cloud_logger.exception("NSJail execution error")
             return ExecutionResponseError(error=f"Execution error: {str(e)}")
 
         finally:

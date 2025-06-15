@@ -17,6 +17,7 @@ bp = Blueprint("execute", __name__)
 request_logger = logging.getLogger("request_logger")
 result_logger = logging.getLogger("result_logger")
 error_logger = logging.getLogger("error_logger")
+cloud_logger = logging.getLogger("cloud_logger")
 
 @bp.route("/execute", methods=["POST"])
 def execute_script():
@@ -34,6 +35,7 @@ def execute_script():
         request_logger.debug("Starting script execution")
         result = executor.execute(script)
         result_logger.info("Script executed successfully", extra={"result": result})
+        cloud_logger.info("Script executed successfully", extra={"result": result})
 
         if hasattr(result, "error") and result.error:
             return jsonify(error=result.error), 400
@@ -42,6 +44,7 @@ def execute_script():
 
     except ExecutionError as ex:
         error_logger.error("Execution error", exc_info=True)
+        cloud_logger.error("Execution error", exc_info=True)
         error_response = ExecutionResponseError(
             message=str(ex),
             stdout=ex.stdout,
@@ -51,4 +54,5 @@ def execute_script():
 
     except Exception as e:
         error_logger.exception("Unexpected error during execution")
+        cloud_logger.exception("Unexpected error during execution")
         return jsonify({"error": "Unexpected error occurred"}), 500

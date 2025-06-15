@@ -43,6 +43,12 @@ logging:
       formatter: simple
       filename: logs/errors.log
 
+    cloud_handler:
+      class: logging.StreamHandler
+      level: INFO
+      formatter: simple
+      stream: ext://sys.stdout
+
   loggers:
     request_logger:
       handlers: [request_handler]
@@ -57,6 +63,11 @@ logging:
     error_logger:
       handlers: [error_handler]
       level: ERROR
+      propagate: no
+
+    cloud_logger:
+      handlers: [cloud_handler]
+      level: INFO
       propagate: no
 
   root:
