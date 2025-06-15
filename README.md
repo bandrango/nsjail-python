@@ -16,6 +16,7 @@ Secure, scalable microservice for executing arbitrary Python code in an isolated
 5. [Configuration](#-configuration)  
 6. [Usage](#-usage)  
 9. [Documentation](#-documentation)
+9. [Deployment](#-deployment)
 
 ## ✨ Features
 
@@ -95,3 +96,12 @@ This approach ensures consistency across environments and simplifies deployment 
    ```bash 
    {domain}/api/v1/docs
    ```
+
+## 🔁 Deployment
+
+   This project uses a modern CI/CD pipeline powered by **GitHub Actions** and **Google Cloud**:
+
+   - **GitHub Actions** handles automated testing, linting, and Docker image builds on each push or pull request (main).
+   - **Google Cloud Run** is used to deploy the containerized API securely and scalably.
+
+   You can extend the pipeline to include staging, testing, and production environments with ease by modifying the provided GitHub Actions workflows.
