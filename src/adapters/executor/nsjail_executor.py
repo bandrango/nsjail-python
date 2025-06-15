@@ -1,99 +1,94 @@
-import os
+import subprocess
+import logging
 import tempfile
-import importlib.util
-import contextlib
-import io
 import json
+from pathlib import Path
 
-from domain.exceptions import ExecutionError
-from adapters.validator.import_validator import ImportValidator
-from adapters.logging_manager import request_logger, result_logger, error_logger
+from src.utils.config_loader import AppConfigLoader
+from interfaces.schemas import ExecutionResponseSchema, ExecutionResponseError
 
-class NsJailExecutor:
-    """
-    Adapter: executes the user script safely using importlib (in-memory sandbox).
-    Validates imports dynamically, runs main(), captures stdout and result.
-    """
 
-    def _contains_newline(self, obj):
-        """
-        Recursively check for any string containing a newline.
-        """
-        if isinstance(obj, str):
-            return '\n' in obj
-        if isinstance(obj, dict):
-            return any(self._contains_newline(v) for v in obj.values())
-        if isinstance(obj, (list, tuple, set)):
-            return any(self._contains_newline(v) for v in obj)
-        return False
+class NsjailExecutor:
+    def __init__(self):
+        self.logger = logging.getLogger("request_logger")
+        self.config = AppConfigLoader().get_nsjail_config()
 
-    def execute(self, script_str: str):
-        # 1. Log start
-        request_logger.info("Starting script execution via NsJailExecutor")
-        request_logger.debug("Script content: %s", script_str)
+        self.binary_path = self._require_config("binary_path")
+        self.config_path = self._require_config("config_path")
+        self.python_path = self._require_config("python_path")
+        self.timeout = int(self.config.get("timeout", 10))
 
-        # 2. Validate imports
-        ImportValidator().validate(script_str)
+    def _require_config(self, key: str) -> str:
+        value = self.config.get(key)
+        if not value:
+            raise ValueError(f"Missing NSJail config value for: '{key}'")
+        return value
 
-        # 3. Write to temp file
-        fd, path = tempfile.mkstemp(suffix='.py')
+    def _wrap_script(self, user_script: str, result_path: str) -> str:
+        return f"""{user_script}
+
+if __name__ == "__main__":
+    try:
+        result = main()
+        if isinstance(result, dict):
+            import json
+            with open("{result_path}", "w") as f:
+                json.dump(result, f)
+        else:
+            raise ValueError("Function 'main' must return a dictionary (JSON serializable)")
+    except Exception as e:
+        print("ERROR:", e)
+"""
+
+    def execute(self, user_script: str):
         try:
-            with os.fdopen(fd, 'w') as tmp:
-                tmp.write(script_str)
+            with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as script_file:
+                script_path = Path(script_file.name)
+                result_path = script_path.with_suffix(".json")
 
-            spec = importlib.util.spec_from_file_location('user_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+                wrapped_script = self._wrap_script(user_script, str(result_path))
+                script_file.write(wrapped_script)
 
-            # 4. Capture stdout & run main()
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                try:
-                    result = module.main()
-                except Exception:
-                    # Log the stacktrace
-                    error_logger.error("Exception in user main()", exc_info=True)
-                    # Attach whatever was printed so far
-                    err = ExecutionError("Execution failed")
-                    err.stdout = buf.getvalue()
-                    raise err
-            stdout = buf.getvalue()
+            command = [
+                self.binary_path,
+                "--config", self.config_path,
+                "--", self.python_path,
+                str(script_path)
+            ]
 
-            # 5. Disallow prints without return (e.g. directory-listings)
-            if result is None and stdout:
-                error_logger.error(
-                    "Disallowed stdout with no return value",
-                    extra={"captured_stdout": stdout}
+            self.logger.debug(f"Running NSJail command: {' '.join(command)}")
+
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout
+            )
+
+            if process.returncode == 0 and result_path.exists():
+                with open(result_path) as f:
+                    result_data = json.load(f)
+
+                return ExecutionResponseSchema(
+                    result=result_data,
+                    stdout=process.stdout
                 )
-                err = ExecutionError("Execution failed")
-                err.stdout = stdout
-                raise err
-
-            # 6. Ensure result is JSON-serializable
-            try:
-                json.dumps(result)
-            except Exception:
-                error_logger.error("Result not JSON-serializable", exc_info=True)
-                err = ExecutionError("Execution failed")
-                err.stdout = stdout
-                raise err
-
-            # 7. Disallow any multi-line strings in the returned value
-            if self._contains_newline(result):
-                error_logger.error(
-                    "Disallowed multiline content in return value",
-                    extra={"result": result}
+            else:
+                error_message = (
+                    f"Script exited with code {process.returncode}. "
+                    f"Stderr: {process.stderr.strip()}"
                 )
-                err = ExecutionError("Execution failed")
-                err.stdout = stdout
-                raise err
+                self.logger.exception(error_message)
+                return ExecutionResponseError(
+                    error="Unable to execute the submitted command. Please verify the structure and content of the script."
+                    )
 
-            # 8. Log success and return both result and stdout
-            result_logger.info("Script run complete", extra={"result": result, "stdout": stdout})
-            return result, stdout
+        except Exception as e:
+            self.logger.exception("NSJail execution error")
+            return ExecutionResponseError(error=f"Execution error: {str(e)}")
 
         finally:
-            try:
-                os.remove(path)
-            except Exception:
-                error_logger.warning("Failed to remove temp file", extra={"temp_path": path})
+            if 'script_path' in locals() and script_path.exists():
+                script_path.unlink()
+            if 'result_path' in locals() and result_path.exists():
+                result_path.unlink()
