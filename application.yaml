@@ -4,7 +4,7 @@ app:
   flask:
     host: 0.0.0.0
     port: 8080
-    debug: true
+    debug: false
 
   allowed_commands:
     - numpy

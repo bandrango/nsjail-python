@@ -15,9 +15,7 @@ Secure, scalable microservice for executing arbitrary Python code in an isolated
 4. [Installation](#-installation)  
 5. [Configuration](#-configuration)  
 6. [Usage](#-usage)  
-7. [Development](#-development)  
-8. [Contributing](#-contributing)  
-9. [License](#-license)
+9. [Documentation](#-documentation)
 
 ## ✨ Features
 
@@ -51,21 +49,31 @@ Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python I
    ```  
 2. **Build Docker image**:  
    ```bash
-   docker build -t nsjail-python:latest .
+   docker buildx build --platform linux/arm64 -t nsjail-flask-service:latest .
    ```
 
 ## 🔌 Configuration
 
 - `nsjail.cfg`: Customize resource limits (CPU, memory, filesystem).  
-- Environment variables (in `docker run` or Kubernetes manifest):  
-  - `PORT` (default: `8080`)  
-  - `TIME_LIMIT` (seconds per execution)  
+
+
+## ⚙️ Centralized Configuration
+
+All environment settings and runtime parameters are centralized in the `application.yaml` file.
+
+This configuration file defines key aspects of the sandbox environment, such as:
+
+- NSJail execution parameters
+- Docker and Python runtime settings
+
+This approach ensures consistency across environments and simplifies deployment and maintenance.
+
 
 ## 💻 Usage
 
 1. **Run container locally**:  
    ```bash
-   docker run -p 8080:8080 nsjail-python:latest
+   docker run --rm  --platform linux/arm64 --name nsjail-flask-service -p 10180:8080 nsjail-flask-service
    ```  
 2. **Execute a script**:  
    ```bash
@@ -83,18 +91,7 @@ Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python I
     }
    ```
 
-## 🛠 Development
-
-1. **Install dependencies**:  
-   ```bash
-   pip install -r requirements.txt
-   ```  
-2. **Run tests** (add testing framework of your choice):  
-   ```bash
-   pytest
-   ``` 
-
-## 📄 API Documentation
+## 📄 Documentation
 
 The REST API is documented using **OpenAPI (Swagger)**.
 
