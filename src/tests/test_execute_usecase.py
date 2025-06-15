@@ -1,7 +1,6 @@
 import pytest
 from usecases.execute_script import ExecuteScriptUseCase, ExecutionError
 
-
 class DummyExecutor:
     def execute(self, script):
         local_vars = {}

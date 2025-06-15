@@ -1,9 +1,5 @@
 import pytest
-import json
-import logging
-import subprocess
-from unittest.mock import patch, mock_open, MagicMock
-from pathlib import Path
+from unittest.mock import patch, MagicMock
 from src.adapters.executor.nsjail_executor import NsjailExecutor
 from src.utils.config_loader import AppConfigLoader
 

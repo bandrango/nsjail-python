@@ -21,7 +21,7 @@ Secure, scalable microservice for executing arbitrary Python code in an isolated
 
 - **Isolated Execution**: Uses `nsjail` to sandbox Python processes, enforcing strict CPU and memory limits.  
 - **RESTful API**: Single endpoint (`POST /execute`) accepts JSON payloads and returns the `main()` function’s output.  
-- **Error Handling**: Validates presence of `main()` and ensures returned values are JSON serializable.  
+- **Error Handling**: Validates the presence of `main()` and ensures returned values are JSON-serializable.  
 - **Containerized**: Docker-ready for seamless deployment on Cloud Run.
 - **CI/CD Ready**: Preconfigured GitHub Actions workflow for linting and build checks.
 
@@ -73,7 +73,7 @@ This approach ensures consistency across environments and simplifies deployment 
    ```  
 2. **Execute a script**:  
    ```bash
-   curl -X POST http://{domain}/api/v1/execute \
+   curl -X POST {domain}/api/v1/execute \
      -H "Content-Type: application/json" \
      -d '{"script": "def main(): return {\"message\": \"Hello from nsjail-python!\"}"}'
    ```  
