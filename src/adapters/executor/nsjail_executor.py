@@ -1,99 +1,101 @@
-import os
+import subprocess
+import logging
 import tempfile
-import importlib.util
-import contextlib
-import io
 import json
+from pathlib import Path
+from src.utils.config_loader import AppConfigLoader
 
-from domain.exceptions import ExecutionError
-from adapters.validator.import_validator import ImportValidator
-from adapters.logging_manager import request_logger, result_logger, error_logger
 
-class NsJailExecutor:
-    """
-    Adapter: executes the user script safely using importlib (in-memory sandbox).
-    Validates imports dynamically, runs main(), captures stdout and result.
-    """
+class NsjailExecutor:
+    def __init__(self):
+        self.config_loader = AppConfigLoader()
+        self.nsjail_config = self.config_loader.get_nsjail_config()
+        self.logger = logging.getLogger("request_logger")
 
-    def _contains_newline(self, obj):
-        """
-        Recursively check for any string containing a newline.
-        """
-        if isinstance(obj, str):
-            return '\n' in obj
-        if isinstance(obj, dict):
-            return any(self._contains_newline(v) for v in obj.values())
-        if isinstance(obj, (list, tuple, set)):
-            return any(self._contains_newline(v) for v in obj)
-        return False
+        for key in ["binary_path", "config_path", "python_path"]:
+            if key not in self.nsjail_config or not self.nsjail_config[key]:
+                raise ValueError(f"Missing NSJail config: {key}")
 
-    def execute(self, script_str: str):
-        # 1. Log start
-        request_logger.info("Starting script execution via NsJailExecutor")
-        request_logger.debug("Script content: %s", script_str)
+    def _wrap_script(self, user_script: str, result_path: str) -> str:
+        return f"""{user_script}
 
-        # 2. Validate imports
-        ImportValidator().validate(script_str)
+if __name__ == "__main__":
+    try:
+        result = main()
+        if isinstance(result, dict):
+            import json
+            with open("{result_path}", "w") as f:
+                json.dump(result, f)
+        else:
+            raise ValueError("Function 'main' must return a dictionary (JSON serializable)")
+    except Exception as e:
+        print("ERROR:", e)
+"""
 
-        # 3. Write to temp file
-        fd, path = tempfile.mkstemp(suffix='.py')
+    def execute(self, user_script: str) -> dict:
+        response = {
+            "result": None,
+            "stdout": "",
+            "error": None
+        }
+
         try:
-            with os.fdopen(fd, 'w') as tmp:
-                tmp.write(script_str)
+            with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as script_file:
+                script_path = Path(script_file.name)
+                result_path = Path(script_file.name.replace(".py", ".json"))
 
-            spec = importlib.util.spec_from_file_location('user_module', path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+                wrapped_script = self._wrap_script(user_script, str(result_path))
+                script_file.write(wrapped_script)
 
-            # 4. Capture stdout & run main()
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                try:
-                    result = module.main()
-                except Exception:
-                    # Log the stacktrace
-                    error_logger.error("Exception in user main()", exc_info=True)
-                    # Attach whatever was printed so far
-                    err = ExecutionError("Execution failed")
-                    err.stdout = buf.getvalue()
-                    raise err
-            stdout = buf.getvalue()
+            self.logger.info(f"Temp script created at: {script_path}")
 
-            # 5. Disallow prints without return (e.g. directory-listings)
-            if result is None and stdout:
-                error_logger.error(
-                    "Disallowed stdout with no return value",
-                    extra={"captured_stdout": stdout}
-                )
-                err = ExecutionError("Execution failed")
-                err.stdout = stdout
-                raise err
+            cmd = [
+                self.nsjail_config["binary_path"],
+                "--config", self.nsjail_config["config_path"],
+                "--",
+                self.nsjail_config["python_path"],
+                str(script_path)
+            ]
 
-            # 6. Ensure result is JSON-serializable
-            try:
-                json.dumps(result)
-            except Exception:
-                error_logger.error("Result not JSON-serializable", exc_info=True)
-                err = ExecutionError("Execution failed")
-                err.stdout = stdout
-                raise err
+            self.logger.info(f"Executing command: {' '.join(cmd)}")
 
-            # 7. Disallow any multi-line strings in the returned value
-            if self._contains_newline(result):
-                error_logger.error(
-                    "Disallowed multiline content in return value",
-                    extra={"result": result}
-                )
-                err = ExecutionError("Execution failed")
-                err.stdout = stdout
-                raise err
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=int(self.nsjail_config.get("time_limit", 10))
+            )
 
-            # 8. Log success and return both result and stdout
-            result_logger.info("Script run complete", extra={"result": result, "stdout": stdout})
-            return result, stdout
+            response["stdout"] = result.stdout.strip()
+
+            if result.returncode != 0 or "ERROR:" in result.stdout:
+                response["error"] = result.stdout.strip() or result.stderr.strip()
+                return response
+
+            if result_path.exists():
+                with open(result_path) as f:
+                    response["result"] = json.load(f)
+            else:
+                response["error"] = "main() did not return a result or result file missing."
+
+            return response
+
+        except subprocess.TimeoutExpired:
+            self.logger.error("Execution timed out")
+            response["error"] = "Execution timed out"
+            return response
+
+        except Exception as ex:
+            self.logger.exception("Unexpected error during execution")
+            response["error"] = str(ex)
+            return response
 
         finally:
-            try:
-                os.remove(path)
-            except Exception:
-                error_logger.warning("Failed to remove temp file", extra={"temp_path": path})
+            for path in [script_path, result_path]:
+                try:
+                    if path.exists():
+                        path.unlink()
+                        self.logger.info(f"Deleted temp file: {path}")
+                except Exception:
+                    self.logger.warning(f"Could not delete temp file: {path}")
+                    

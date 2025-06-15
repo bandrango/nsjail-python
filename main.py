@@ -1,22 +1,23 @@
-# main.py
-
 import os
 import sys
+import logging
 
-# ─── 1) Ensure Python can import from src/ ─────────────────────────────
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 SRC_DIR  = os.path.join(BASE_DIR, 'src')
 sys.path.insert(0, SRC_DIR)
 
 # ─── 2) Initialize logging BEFORE any Flask imports ────────────────────
-from adapters.logging_manager import LoggingService
+from utils.config_loader import AppConfigLoader
 
-logging_service = LoggingService(
-    config_path=os.path.join(SRC_DIR, 'config', 'logging.yaml')
-)
-request_logger = logging_service.request_logger
-error_logger   = logging_service.error_logger
-result_logger  = logging_service.result_logger
+#loader = AppConfigLoader(
+#    config_path=os.path.join(SRC_DIR, 'config', 'application.yaml')
+#)
+config_loader = AppConfigLoader()
+request_logger = logging.getLogger("request_logger")
+error_logger = logging.getLogger("error_logger")
+result_logger = logging.getLogger("result_logger")
+
+flask_config = config_loader.get_flask_config()
 
 request_logger.info("Initializing application logging")
 
@@ -29,6 +30,7 @@ from adapters.http.docs import execute_ns
 
 # ─── 4) Create Flask app and RESTX Api ────────────────────────────────
 app = Flask(__name__)
+app.config.update(flask_config)
 
 # Use major version in the URL prefix
 version_major = __version__.split('.')[0]
@@ -73,4 +75,6 @@ def version():
 # ─── 9) Run! ─────────────────────────────────────────────────────────
 if __name__ == '__main__':
     request_logger.info("Starting Flask app on 0.0.0.0:8080")
-    app.run(host='0.0.0.0', port=8080)
+    app.run(host=flask_config.get("host", "0.0.0.0"),
+            port=flask_config.get("port", 8080),
+            debug=flask_config.get("debug", False))

@@ -1,7 +1,11 @@
 import ast
 import importlib
+import logging
+
 from domain.exceptions import ExecutionError
-from adapters.logging_manager import request_logger, error_logger
+
+request_logger = logging.getLogger("request_logger")
+error_logger = logging.getLogger("error_logger")
 
 class ImportValidator(ast.NodeVisitor):
     """

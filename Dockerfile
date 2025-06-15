@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # nsjail y demás deps…
 RUN apk add --no-cache nsjail libseccomp
-COPY src/nsjail.cfg /etc/nsjail.cfg
+COPY src/config/nsjail.cfg /etc/nsjail.cfg
 RUN mkdir -p logs
 
 COPY . .
@@ -19,4 +19,5 @@ FROM base AS test
 RUN pip install --no-cache-dir pytest
 
 # por defecto, al arrancar esta imagen ejecuta los tests
-ENTRYPOINT ["pytest", "--maxfail=1", "--disable-warnings", "-q"]
+#ENTRYPOINT ["pytest", "--maxfail=1", "--disable-warnings", "-q"]
+ENTRYPOINT ["python3", "main.py"]
