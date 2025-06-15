@@ -54,17 +54,13 @@ Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python I
 
 ## 🔌 Configuration
 
-- `nsjail.cfg`: Customize resource limits (CPU, memory, filesystem).  
-
-
-## ⚙️ Centralized Configuration
-
 All environment settings and runtime parameters are centralized in the `application.yaml` file.
-
 This configuration file defines key aspects of the sandbox environment, such as:
+- NSJail
+- Logging
+- Flask
 
-- NSJail execution parameters
-- Docker and Python runtime settings
+- `nsjail.cfg`: Customize resource limits (CPU, memory, filesystem).  
 
 This approach ensures consistency across environments and simplifies deployment and maintenance.
 
