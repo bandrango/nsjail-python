@@ -12,7 +12,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: debian:bullseye-slim
     permissions:
       contents: 'read'
       id-token: 'write'
