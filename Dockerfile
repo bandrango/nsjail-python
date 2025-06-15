@@ -13,6 +13,9 @@ RUN mkdir -p logs
 
 COPY . .
 
+ENV PYTHONPATH=/app/src
+RUN pytest
+
 # ─ Etapa “test” ───────────────────────────────────────────
 FROM base AS test
 # instala pytest (o, mejor, un requirements-dev.txt que incluya pytest, pytest-mock…)

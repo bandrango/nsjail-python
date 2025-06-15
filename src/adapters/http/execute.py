@@ -4,6 +4,7 @@ from flask import Blueprint, request
 from adapters.executor.nsjail_executor import NsjailExecutor
 from adapters.validator.import_validator import ImportValidator
 from domain.exceptions import ExecutionError
+from interfaces.schemas import ScriptRequestSchema, ExecutionResponseSchema,  ExecutionResponseError
 
 executor = NsjailExecutor()
 bp = Blueprint('execute', __name__)
@@ -14,9 +15,10 @@ error_logger = logging.getLogger("error_logger")
 @bp.route('/execute', methods=['POST'])
 def execute_script():
     payload = request.get_json() or {}
+    validated = ScriptRequestSchema(**payload)
     request_logger.info("Received execution request", extra={"payload": payload})
 
-    script = payload.get('script', '')
+    script = validated.script
     try:
         request_logger.debug("Starting import validation")
         ImportValidator().validate(script)
@@ -24,19 +26,21 @@ def execute_script():
 
         request_logger.info("Executing script in sandbox")
         output = executor.execute(script)
-
         if output.get("error"):
-            return {"error": output["error"]}, 400
+            error_scheme = ExecutionResponseError(**output)
+            error_logger.error("Execution failed", extra={"error": error_scheme.error})            
+            return {"error": error_scheme.error}, 400
 
         # Build the response exactly as required
-        response = {"result": output["result"], "stdout": output["stdout"]}
+        scheme_result = ExecutionResponseSchema(**output)
+        response = {"result": scheme_result.result, "stdout": scheme_result.stdout}
 
         # --- Updated line: log the full JSON under 'result' ---
         result_logger.info(f"Responding with execution output: {response}")
 
         return response, 200
 
-    except ExecutionError as e:
+    except Exception as e:
         stdout = getattr(e, 'stdout', '')
         error_logger.error("ExecutionError occurred", exc_info=True)
         return {"error": str(e), "stdout": stdout}, 400
