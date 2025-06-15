@@ -94,10 +94,6 @@ Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python I
    pytest
    ``` 
 
-## 🤝 Contributing
-
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.  
-
 ## 📄 API Documentation
 
 The REST API is documented using **OpenAPI (Swagger)**.
