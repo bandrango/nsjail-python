@@ -92,16 +92,14 @@ Client (--JSON script--) → Flask/FastAPI Service → nsjail ⛓️→ Python I
 2. **Run tests** (add testing framework of your choice):  
    ```bash
    pytest
-   ```  
-3. **Lint & Format**:  
-   ```bash
-   flake8 . && black .
-   ```
+   ``` 
 
 ## 🤝 Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.  
 
-## 📄 License
+## 📄 API Documentation
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+The REST API is documented using **OpenAPI (Swagger)**.
+
+Once the service is running, you can access the interactive Swagger UI at: {domain}/api/v1/docs
