@@ -60,9 +60,9 @@ This configuration file defines key aspects of the sandbox environment, such as:
 - Logging
 - Flask
 
-- `nsjail.cfg`: Customize resource limits (CPU, memory, filesystem).  
-
 This approach ensures consistency across environments and simplifies deployment and maintenance.
+
+`nsjail.cfg`: Customize resource limits (CPU, memory, filesystem).  
 
 
 ## 💻 Usage
@@ -73,7 +73,7 @@ This approach ensures consistency across environments and simplifies deployment 
    ```  
 2. **Execute a script**:  
    ```bash
-   curl -X POST http://localhost:8080/execute \
+   curl -X POST http://{domain}/api/v1/execute \
      -H "Content-Type: application/json" \
      -d '{"script": "def main(): return {\"message\": \"Hello from nsjail-python!\"}"}'
    ```  
@@ -89,6 +89,9 @@ This approach ensures consistency across environments and simplifies deployment 
 
 ## 📄 Documentation
 
-The REST API is documented using **OpenAPI (Swagger)**.
+   The REST API is documented using **OpenAPI (Swagger)**.
 
-Once the service is running, you can access the interactive Swagger UI at: {domain}/api/v1/docs
+   Once the service is running, you can access the interactive Swagger UI at: 
+   ```bash 
+   {domain}/api/v1/docs
+   ```
